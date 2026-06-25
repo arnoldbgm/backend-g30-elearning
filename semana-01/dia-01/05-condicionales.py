@@ -81,10 +81,17 @@
 # else:
 #    print("Vuelve a escoger una opcion")
 
-edad = "16"
+# edad = "16"
 
-if type(edad) is int:
-   print("La edad es un entero")
+# if type(edad) is int:
+#    print("La edad es un entero")
 
-else:
-   print("La edad NO es un entero")
+# else:
+#    print("La edad NO es un entero")
+
+
+nota = 5
+
+resultado = "Aprobar" if nota >= 11 else "Desaprobado"
+
+print(resultado)
