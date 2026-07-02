@@ -72,11 +72,19 @@ Esto crea una carpeta `venv/` con una copia aislada de Python. Fijate que aparec
 
 3. Activá el entorno:
 
+- Windows
 ```bash
-# Windows
+
 venv\Scripts\activate
 ```
-
+- En gitbash:
+```bash
+    source venv/Scripts/activate
+```
+- En macOS y Linux:
+```bash
+    source venv/bin/activate
+```
 Vas a ver que aparece `(venv)` al inicio de la línea. Eso significa que estás dentro del entorno virtual. Es como si te hubieras puesto una casaca que dice "todo lo que instale ahora es solo para este proyecto".
 
 Para desactivarlo:
