@@ -1,3 +1,11 @@
+<p align="center">
+  <img src="https://cdn.simpleicons.org/flask/000000" width="90" alt="Flask logo"/>
+  &nbsp;&nbsp;&nbsp;
+  <img src="https://cdn.simpleicons.org/python/3776AB" width="90" alt="Python logo"/>
+  &nbsp;&nbsp;&nbsp;
+  <img src="https://cdn.simpleicons.org/postman/FF6C37" width="90" alt="Postman logo"/>
+</p>
+
 # 🧠 Guía — Día 1 (Semana 3): Entornos virtuales, pip y Flask
 
 Bienvenidos AL BACKEND. Sí, hoy dejamos de ser usuarios de Python y nos convertimos en desarrolladores que exponen servicios. Vamos a crear nuestro propio servidor, nuestra propia API, y la vamos a probar como Dios manda con **Postman**. Prepárense que esto cambia el juego.
@@ -23,6 +31,10 @@ Eso es exactamente lo que va a pasar entre Postman (o cualquier app) y nuestro F
 Cliente (Postman)  --- pide algo -->  Servidor (Flask)
 Cliente (Postman)  <-- responde ---  Servidor (Flask)
 ```
+
+<p align="center">
+  <img src="guia_assets/diagrama-cliente-servidor.svg" width="600" alt="Diagrama del modelo cliente-servidor"/>
+</p>
 
 Cada "pedido" tiene una estructura: un **método** (¿qué querés hacer? leer, crear, borrar...), una **URL** (¿a dónde le pedís?), a veces un **body** (¿qué datos mandás?), y el servidor responde con **datos** + un **código de estado** (¿salió bien o mal?).
 
@@ -203,6 +215,10 @@ print(Fore.MAGENTA + "Perú" + Fore.GREEN + " campeón" + Fore.RESET)
 
 ## 3. Postman — la herramienta con la que vamos a vivir todo el curso
 
+<p align="center">
+  <img src="https://cdn.simpleicons.org/postman/FF6C37" width="70" alt="Postman logo"/>
+</p>
+
 Antes de Flask, un momento para esto: **Postman va a ser tu compañero de todos los días de acá en adelante**. No es opcional, no es "para después". Cada endpoint que hagamos se prueba en Postman AL TOQUE, apenas está escrito. No hay excusas de "ya lo probaré después".
 
 **¿Por qué no usar el navegador y ya?** Porque el navegador solo sabe hacer GET fácilmente. No podés mandar un body en JSON con un click, no podés guardar tus peticiones, no podés armar una colección ordenada de todos tus endpoints. Postman te da control total sobre el método, la URL, los headers y el body — que es exactamente lo que necesitás para probar una API de verdad.
@@ -236,6 +252,10 @@ Cuando abras Postman por primera vez, prestá atención a estas zonas:
 ---
 
 ## 4. Flask — tu primer servidor (y te juro que no es brujería)
+
+<p align="center">
+  <img src="https://cdn.simpleicons.org/flask/000000" width="70" alt="Flask logo"/>
+</p>
 
 Flask es un **microframework**. ¿Qué significa "micro"? Que te da lo mínimo para construir un servidor web sin imponerte cómo ordenar tu código. No trae ORM, no trae autenticación, no trae un montón de cosas que no necesitás hoy. Cuando las necesites, las agregás.
 
@@ -703,6 +723,10 @@ def crear_jugador():
 Cuando tu servidor responde, no solo manda datos. También manda un **código de estado** que es como su carita: le dice al cliente si todo salió bien, si se equivocó, si no encontró algo, o si explotó todo.
 
 **Analogía:** pensá en un semáforo con muchos más colores que el normal. Verde total (200-201) significa "andá tranquilo, todo salió bien". Amarillo (400) significa "pará, algo mandaste mal, revisá tu pedido". Un cartel de "no existe" (404) significa "acá no hay nada, seguí buscando en otro lado". Y rojo total (500) significa "chocamos, algo se rompió del lado del servidor, y no es tu culpa".
+
+<p align="center">
+  <img src="guia_assets/codigos-http-semaforo.svg" width="600" alt="Familias de códigos HTTP: 2xx, 4xx, 5xx"/>
+</p>
 
 Y esto es CLAVE: una API no es solo devolver datos, es devolverlos con el código correcto. Si no, el cliente (que puede ser una app hecha por OTRO equipo, que ni conocés) no tiene forma de saber automáticamente si su pedido salió bien o mal — tendría que "adivinar" leyendo el mensaje de texto, y eso rompe toda la lógica de una API bien hecha.
 
