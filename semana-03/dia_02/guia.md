@@ -1,32 +1,53 @@
 # 🧠 Guía — Día 2 (Semana 3): CRUD completo + Frontend
 
-Bienvenidos al día en que TODO cobra sentido. Hoy no solo vamos a leer datos — vamos a **Crear, Leer, Actualizar y Eliminar** jugadores como si fuéramos dueños de la base de datos del Mundial. Y después... ¡conectamos todo con un frontend! HTML, JavaScript, fetch, la combinación letal. Todo validado con Postman, obvio.
+<p align="center">
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/HTML5_logo_and_wordmark.svg?width=100" alt="Logo de HTML5" height="80">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/JavaScript-logo.png?width=100" alt="Logo de JavaScript" height="80">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Flask_logo.svg?width=240" alt="Logo de Flask" height="80">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Postman_%28software%29.png?width=240" alt="Logo de Postman" height="70">
+</p>
+
+Bienvenidos al día en que TODO cobra sentido. Ayer aprendimos a crear un servidor con Flask, a devolver datos, a recibir JSON. Hoy no solo vamos a leer datos — vamos a **Crear, Leer, Actualizar y Eliminar** jugadores como si fuéramos dueños de la base de datos del Mundial. Y después... ¡conectamos todo con un frontend! HTML, JavaScript, fetch, la combinación letal. Todo validado con Postman, obvio.
+
+Antes de escribir código, tenemos que entender **qué es CRUD** y **por qué** esto es el 90% de todas las APIs que existen. Porque si entendés CRUD, entendés cómo funciona internet.
 
 ---
 
-## 1. CRUD — las 4 letras que mueven el mundo
+## 0. ¿Qué es CRUD y por qué cambia todo?
 
-CRUD no es una mala palabra, son las **4 operaciones básicas** de cualquier sistema que persista datos. Literalmente, el 90% de las APIs que existen hacen solo esto:
+CRUD no es una mala palabra, son las **4 operaciones básicas** que cualquier sistema necesita para manejar datos. Literalmente, el 90% de las APIs del mundo solo hacen esto.
 
-| Operación | Método HTTP | ¿Qué hace? |
-|-----------|------------|------------|
-| **C**reate | POST | Crear un recurso nuevo |
-| **R**ead | GET | Obtener uno o varios recursos |
-| **U**pdate | PUT / PATCH | Actualizar un recurso que ya existe |
-| **D**elete | DELETE | Borrar un recurso |
+<p align="center">
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Client-server-model.svg?width=520" alt="Diagrama del modelo cliente-servidor" width="520">
+</p>
+<p align="center"><sub><i>Cada pedido del cliente es una operación CRUD. Imagen: Wikimedia Commons.</i></sub></p>
 
-Hoy implementamos las 4. Sin base de datos, sin vueltas — en memoria, paso a paso.
+| Operación | Método HTTP | ¿Qué hace? | Ejemplo real |
+|-----------|------------|------------|-------------|
+| **C**reate | POST | Crear un recurso nuevo | Dar de alta un jugador |
+| **R**ead | GET | Obtener uno o varios | Listar todos los jugadores |
+| **U**pdate | PUT / PATCH | Actualizar uno existente | Cambiar la edad de un jugador |
+| **D**elete | DELETE | Borrar un recurso | Eliminar un jugador |
+
+**Analogía (retenela, te va a salvar en entrevistas laborales):** pensá en un restobar. POST es hacer un pedido nuevo (creás algo que no existía antes). GET es mirar la carta de tragos (leés). PUT/PATCH es pedirle al mozo que le ponga más hielo a tu trago (actualizás). DELETE es pedir que se lleven el plato vacío (borrás).
+
+Cada operación tiene su método HTTP, su propósito, y su código de respuesta. Mezclarlos es como pedir un trago en la ventanilla de los pedidos para llevar — puede funcionar, pero no es la forma correcta.
 
 ---
 
-## 2. CRUD completo con lista en memoria
+## 1. READ — Leer datos (esto ya lo saben, pero lo repasamos como desafío)
 
-### 2A — Demo: GET y POST (lo tenemos del Día 1)
+**Profe dice:** "A ver, equipo. Necesito que me muestren todos los jugadores que tenemos en la lista. ¿Qué endpoint necesitamos? ¿Qué método HTTP?"
 
-Arrancamos con el código que tenemos:
+### 1A — Demo: GET /jugadores (listar todos)
+
+Armamos el endpoint que devuelve la lista completa:
 
 ```python
-from flask import Flask, request
+from flask import Flask
 
 app = Flask(__name__)
 
@@ -44,19 +65,118 @@ def inicio():
     return "API de Jugadores del Mundial 2026"
 
 
+@app.route("/jugadores")
+def listar_jugadores():
+    return jugadores
+```
+
+**Probá en Postman:** `GET /jugadores` → código 200, te devuelve los 5 jugadores
+
+---
+
+### 1B — Reto: GET /jugador/<id> (buscar uno solo)
+
+**Profe dice:** "Ahora quiero poder preguntar por UN solo jugador. Por ejemplo, `GET /jugador/3` debería traerme solo a Renato Tapia. ¿Y si pregunto por uno que no existe, como el 99? Ahí debería responder con un 404."
+
+Implementalo. Usá un `for` para recorrer la lista y comparar `id` por `id`.
+
+<details>
+<summary><b>Solución (reto)</b></summary>
+
+```python
 @app.route("/jugador/<int:id>")
 def obtener_jugador(id):
     for j in jugadores:
         if j["id"] == id:
             return j
     return {"error": "Jugador no encontrado"}, 404
+```
+
+**Probá en Postman:**
+- `GET /jugador/3` → datos de Renato Tapia, código 200
+- `GET /jugador/99` → `{"error": "Jugador no encontrado"}`, código 404
+
+</details>
+
+---
+
+## 2. CREATE — Crear jugadores (recibir datos del cliente)
+
+**Profe dice:** "Bien, ya sabemos leer. Ahora: ¿cómo hacemos para AGREGAR un jugador nuevo? El usuario tiene que mandarnos los datos. ¿Por dónde los recibe Flask? Por el body de la petición. ¿Y qué método se usa para crear algo nuevo? POST."
+
+### 2A — Demo: POST /jugador con JSON
+
+La ruta POST recibe un JSON desde Postman, lo procesa, y agrega el jugador a la lista:
+
+```python
+from flask import Flask, request
+
+app = Flask(__name__)
+
+jugadores = [
+    {"id": 1, "nombre": "Paolo Guerrero", "edad": 41, "posicion": "Delantero", "equipo": "Alianza Lima", "seleccion": "Perú"},
+    {"id": 2, "nombre": "André Carrillo", "edad": 33, "posicion": "Extremo", "equipo": "Al Hilal", "seleccion": "Perú"},
+    {"id": 3, "nombre": "Renato Tapia", "edad": 29, "posicion": "Mediocampista", "equipo": "Leganés", "seleccion": "Perú"},
+    {"id": 4, "nombre": "Lionel Messi", "edad": 38, "posicion": "Delantero", "equipo": "Inter Miami", "seleccion": "Argentina"},
+    {"id": 5, "nombre": "Vinícius Jr", "edad": 25, "posicion": "Extremo", "equipo": "Real Madrid", "seleccion": "Brasil"},
+]
 
 
-@app.route("/jugadores")
-def listar_jugadores():
-    return jugadores
+@app.route("/jugador", methods=["POST"])
+def crear_jugador():
+    datos = request.json
 
+    nuevo_id = 0
+    for j in jugadores:
+        if j["id"] > nuevo_id:
+            nuevo_id = j["id"]
+    nuevo_id += 1
 
+    nuevo_jugador = {
+        "id": nuevo_id,
+        "nombre": datos.get("nombre", ""),
+        "edad": datos.get("edad", 0),
+        "posicion": datos.get("posicion", ""),
+        "equipo": datos.get("equipo", ""),
+        "seleccion": datos.get("seleccion", ""),
+    }
+
+    jugadores.append(nuevo_jugador)
+    return nuevo_jugador, 201
+```
+
+**En Postman:**
+- Método: POST
+- URL: `http://127.0.0.1:5000/jugador`
+- Body → raw → JSON:
+```json
+{
+    "nombre": "Alisson Becker",
+    "edad": 33,
+    "posicion": "Arquero",
+    "equipo": "Liverpool",
+    "seleccion": "Brasil"
+}
+```
+
+**Respuesta esperada:** código 201, el servidor devuelve el jugador creado.
+
+---
+
+### 2B — Reto: Validá los datos antes de crear
+
+**Profe dice:** "Está bien, creamos jugadores... pero mirá esto: ¿qué pasa si mandamos un POST sin nombre? ¿O sin posición? Se va a crear un jugador con datos vacíos. Eso no tiene sentido. Tenemos que VALIDAR que el cliente nos mande lo obligatorio antes de guardar."
+
+Agregá estas validaciones:
+- Si no mandó JSON (`request.json` es `None` o vacío) → devolvé `{"error": "Debes enviar datos en formato JSON"}` con código **400**
+- Si falta el campo `nombre` o está vacío → devolvé `{"error": "Falta el campo: nombre"}` con código **400**
+- Si falta `posicion` o está vacío → devolvé **400**
+- Si falta `seleccion` o está vacío → devolvé **400**
+
+<details>
+<summary><b>Solución (reto)</b></summary>
+
+```python
 @app.route("/jugador", methods=["POST"])
 def crear_jugador():
     datos = request.json
@@ -92,33 +212,47 @@ def crear_jugador():
     return nuevo_jugador, 201
 ```
 
+**Probá en Postman:**
+
+| Body | Código esperado |
+|------|-----------------|
+| `{"nombre": "James", "posicion": "MED", "seleccion": "COL"}` | **201** |
+| `{"nombre": ""}` | **400** — falta nombre |
+| `{"posicion": "Arquero"}` | **400** — falta nombre |
+| Body vacío | **400** — debe enviar JSON |
+
+</details>
+
 ---
 
-### 2B — Reto: Agregar PUT y DELETE
+## 3. UPDATE — Modificar jugadores existentes
 
-Agregale a ese `app.py` los endpoints faltantes:
+**Profe dice:** "Ya tenemos READ y CREATE. Ahora: un jugador se cambia de equipo, se pone más viejo... necesitamos ACTUALIZAR sus datos. ¿Qué método HTTP usamos cuando queremos modificar algo que ya existe?"
 
-1. **`PUT /jugador/<id>`** — Actualiza los datos de un jugador existente
-   - Recibe JSON con los campos a actualizar
-   - Solo actualiza los campos que vienen en el JSON (no reemplaza todo)
-   - Si el jugador no existe, devolvé 404
-   - Si no envía datos, devolvé 400
-   - Devolvé el jugador actualizado con código 200
+Algunos dirán PUT, otros PATCH. Vamos a ver la diferencia porque es una de las preguntas clásicas de entrevista.
 
-2. **`DELETE /jugador/<id>`** — Elimina un jugador
-   - Si existe, lo elimina de la lista
-   - Devolvé `{"mensaje": "Jugador eliminado"}` con código 200
-   - Si no existe, devolvé 404
+### PUT vs PATCH — la confusión más común
 
-> **Pista:** para actualizar, primero encontrá al jugador con un `for`, después actualizá campo por campo. Para eliminar, encontrá al jugador, usá `jugadores.remove(j)` y cortá con `return`.
+<p align="center">
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/JSON_vector_logo.svg?width=130" alt="Logo de JSON" width="130">
+</p>
+<p align="center"><sub><i>JSON es el idioma en que hablamos con PUT y PATCH. Imagen: Wikimedia Commons.</i></sub></p>
 
-<details>
-<summary><b>Solución (reto)</b></summary>
+| Método | Qué hace | ¿Qué pasa con los campos que no mandaste? |
+|--------|----------|-------------------------------------------|
+| **PUT** | Reemplaza TODO el recurso | Se pierden. Adiós. Se fueron. |
+| **PATCH** | Actualiza SOLO los campos que llegan | Los que no mandaste se quedan como están |
 
-Agregá estos endpoints al `app.py`:
+**Analogía:** PUT es como pedir un plato nuevo desde cero cambiando todo. PATCH es como pedir "sin cebolla" para el plato que ya tenés. Con PUT devolvés el plato completo a la cocina y te mandan uno nuevo. Con PATCH el mozo anota una nota al costado y el plato vuelve con ese cambio apenas.
+
+Nosotros vamos a usar PATCH porque es más seguro: solo tocamos lo que nos mandan.
+
+### 3A — Demo: PATCH /jugador/<id>
+
+Implementamos el endpoint para actualizar SOLO los campos que lleguen:
 
 ```python
-@app.route("/jugador/<int:id>", methods=["PUT"])
+@app.route("/jugador/<int:id>", methods=["PATCH"])
 def actualizar_jugador(id):
     for j in jugadores:
         if j["id"] == id:
@@ -134,89 +268,36 @@ def actualizar_jugador(id):
             return j, 200
 
     return {"error": "Jugador no encontrado"}, 404
-
-
-@app.route("/jugador/<int:id>", methods=["DELETE"])
-def eliminar_jugador(id):
-    for j in jugadores:
-        if j["id"] == id:
-            jugadores.remove(j)
-            return {"mensaje": "Jugador eliminado"}, 200
-
-    return {"error": "Jugador no encontrado"}, 404
 ```
 
-**Probalo en Postman:**
+**Punto clave:** ese `for campo in datos` recorre SOLO los campos que el cliente mandó. Si mandó solo `{"edad": 42}`, solo actualiza `edad`. El resto se queda igual.
 
-| Método | URL | Body | Qué esperar |
-|--------|-----|------|-------------|
-| `PUT` | `/jugador/3` | `{"edad": 30, "equipo": "Celta de Vigo"}` | Renato Tapia actualizado, código 200 |
-| `PUT` | `/jugador/99` | `{"edad": 25}` | Error 404 |
-| `DELETE` | `/jugador/5` | - | "Jugador eliminado", código 200 |
-| `GET` | `/jugadores` | - | Lista sin Vinícius Jr |
-| `DELETE` | `/jugador/99` | - | Error 404 |
+**Probá en Postman:**
 
-</details>
+```
+PATCH /jugador/3
+Body: {"edad": 30, "equipo": "Celta de Vigo"}
+```
+→ Renato Tapia con edad 30 y nuevo equipo, código 200
+
+```
+PATCH /jugador/99
+Body: {"edad": 25}
+```
+→ `{"error": "Jugador no encontrado"}`, código 404
 
 ---
 
-## 3. PUT vs PATCH — la confusión más común (y cómo evitarla)
+### 3B — Reto: Validaciones en PATCH
 
-Esta es una pregunta de entrevista de trabajo, te lo juro. Y la mayoría la pifia.
+**Profe dice:** "Ahora, del mismo modo que validamos en POST, tenemos que validar en PATCH. ¿Qué pasa si alguien manda `{"edad": -5}`? O `{"posicion": ""}`? Eso no debe pasar."
 
-| Método | Qué hace | ¿Qué pasa con los campos que no mandaste? |
-|--------|----------|-------------------------------------------|
-| **PUT** | Reemplaza TODO el recurso | Se pierden. Adiós. Se fueron. |
-| **PATCH** | Actualiza SOLO los campos que llegan | Los que no mandaste se quedan como están |
-
-En nuestro código del reto anterior usamos `PUT` pero en realidad hicimos **PATCH** (porque actualizamos solo los campos que llegaban). Está bien para aprender, pero en una API de verdad, si hacés un PUT que se comporta como PATCH, un backend experimentado te va a mirar feo.
-
-Honestamente: **usá PATCH**. Es más correcto y no perdés nada.
-
-### 3A — Demo: PUT vs PATCH en acción
-
-Con el servidor corriendo, hacé estas pruebas en Postman:
-
-**Caso PUT puro (reemplazo total):**
-
-Si el endpoint hiciera reemplazo total, un `PUT /jugador/1` con body:
-
-```json
-{
-    "nombre": "Paolo Guerrero",
-    "edad": 42
-}
-```
-
-...borraría `posicion`, `equipo` y `seleccion`. No queremos eso.
-
-**Caso PATCH (nuestra implementación):**
-
-Nuestra versión actualiza solo lo que llega. Si enviás `{"edad": 42}`, los demás campos se mantienen.
-
-Probá:
-```
-PUT /jugador/1
-Body: {"edad": 42}
-```
-→ El jugador 1 ahora tiene edad 42, pero todo lo demás igual.
-
-Después revertilo:
-```
-PUT /jugador/1
-Body: {"edad": 41}
-```
-
----
-
-### 3B — Reto: Refactor con PATCH y validación extra
-
-Mejorá tu API:
-
-1. Cambiá la ruta de actualización para que use **`methods=["PATCH"]`** (más correcto semánticamente)
-2. Validá que `edad` (si se envía) sea un número positivo y menor a 100
-3. Validá que `posicion` (si se envía) no esté vacío
-4. Si alguna validación falla, devolvé código **400** con el mensaje específico
+Agregale validaciones al endpoint PATCH:
+- `edad`: si se envía, debe ser un número entre 0 y 100
+- `posicion`: si se envía, no puede estar vacía
+- `nombre`: si se envía, no puede estar vacío
+- `seleccion`: si se envía, no puede estar vacía
+- Si alguna validación falla, devolvé **400** con mensaje específico
 
 <details>
 <summary><b>Solución (reto)</b></summary>
@@ -281,17 +362,192 @@ Body: {"posicion": ""}
 
 ---
 
-## 4. Frontend — ahora sí, algo que se ve bonito
+## 4. DELETE — Eliminar jugadores
+
+**Profe dice:** "Última operación del CRUD. ¿Qué método usamos cuando queremos BORRAR algo? DELETE. No lleva body, solo la URL con el ID."
+
+### 4A — Demo: DELETE /jugador/<id>
+
+```python
+@app.route("/jugador/<int:id>", methods=["DELETE"])
+def eliminar_jugador(id):
+    for j in jugadores:
+        if j["id"] == id:
+            jugadores.remove(j)
+            return {"mensaje": "Jugador eliminado"}, 200
+
+    return {"error": "Jugador no encontrado"}, 404
+```
+
+**Probá en Postman:**
+- `DELETE /jugador/5` → `{"mensaje": "Jugador eliminado"}`, código 200
+- `GET /jugadores` → la lista ya no tiene a Vinícius Jr
+- `DELETE /jugador/99` → `{"error": "Jugador no encontrado"}`, código 404
+
+---
+
+### 4B — Reto: Armá el CRUD completo y probalo
+
+**Profe dice:** "Ahora juntamos TODO. Con los endpoints que hicieron (GET todos, GET por ID, POST, PATCH, DELETE), armen un solo `app.py` con el CRUD completo y verifiquen que funciona."
+
+Armá un solo archivo `app.py` con:
+1. `GET /` → bienvenida
+2. `GET /jugadores` → lista completa
+3. `GET /jugador/<id>` → uno solo o 404
+4. `POST /jugador` → crear con validaciones, código 201
+5. `PATCH /jugador/<id>` → actualizar con validaciones, código 200
+6. `DELETE /jugador/<id>` → eliminar o 404
+
+<details>
+<summary><b>Solución (reto)</b></summary>
+
+```python
+from flask import Flask, request
+
+app = Flask(__name__)
+
+jugadores = [
+    {"id": 1, "nombre": "Paolo Guerrero", "edad": 41, "posicion": "Delantero", "equipo": "Alianza Lima", "seleccion": "Perú"},
+    {"id": 2, "nombre": "André Carrillo", "edad": 33, "posicion": "Extremo", "equipo": "Al Hilal", "seleccion": "Perú"},
+    {"id": 3, "nombre": "Renato Tapia", "edad": 29, "posicion": "Mediocampista", "equipo": "Leganés", "seleccion": "Perú"},
+    {"id": 4, "nombre": "Lionel Messi", "edad": 38, "posicion": "Delantero", "equipo": "Inter Miami", "seleccion": "Argentina"},
+    {"id": 5, "nombre": "Vinícius Jr", "edad": 25, "posicion": "Extremo", "equipo": "Real Madrid", "seleccion": "Brasil"},
+]
+
+
+@app.route("/")
+def inicio():
+    return "API de Jugadores del Mundial 2026"
+
+
+@app.route("/jugadores")
+def listar_jugadores():
+    return jugadores
+
+
+@app.route("/jugador/<int:id>")
+def obtener_jugador(id):
+    for j in jugadores:
+        if j["id"] == id:
+            return j
+    return {"error": "Jugador no encontrado"}, 404
+
+
+@app.route("/jugador", methods=["POST"])
+def crear_jugador():
+    datos = request.json
+
+    if not datos:
+        return {"error": "Debes enviar datos en formato JSON"}, 400
+
+    if "nombre" not in datos or not str(datos.get("nombre", "")).strip():
+        return {"error": "Falta el campo: nombre"}, 400
+
+    if "posicion" not in datos or not str(datos.get("posicion", "")).strip():
+        return {"error": "Falta el campo: posicion"}, 400
+
+    if "seleccion" not in datos or not str(datos.get("seleccion", "")).strip():
+        return {"error": "Falta el campo: seleccion"}, 400
+
+    nuevo_id = 0
+    for j in jugadores:
+        if j["id"] > nuevo_id:
+            nuevo_id = j["id"]
+    nuevo_id += 1
+
+    nuevo_jugador = {
+        "id": nuevo_id,
+        "nombre": datos["nombre"],
+        "edad": datos.get("edad", 0),
+        "posicion": datos["posicion"],
+        "equipo": datos.get("equipo", ""),
+        "seleccion": datos["seleccion"],
+    }
+
+    jugadores.append(nuevo_jugador)
+    return nuevo_jugador, 201
+
+
+@app.route("/jugador/<int:id>", methods=["PATCH"])
+def actualizar_jugador(id):
+    for j in jugadores:
+        if j["id"] == id:
+            datos = request.json
+
+            if not datos:
+                return {"error": "Debes enviar datos en formato JSON"}, 400
+
+            if "edad" in datos:
+                try:
+                    edad = int(datos["edad"])
+                    if edad < 0 or edad > 100:
+                        return {"error": "La edad debe estar entre 0 y 100"}, 400
+                except (ValueError, TypeError):
+                    return {"error": "La edad debe ser un número válido"}, 400
+
+            if "posicion" in datos and not str(datos["posicion"]).strip():
+                return {"error": "La posición no puede estar vacía"}, 400
+
+            if "nombre" in datos and not str(datos["nombre"]).strip():
+                return {"error": "El nombre no puede estar vacío"}, 400
+
+            if "seleccion" in datos and not str(datos["seleccion"]).strip():
+                return {"error": "La selección no puede estar vacía"}, 400
+
+            for campo in datos:
+                if campo in j:
+                    j[campo] = datos[campo]
+
+            return j, 200
+
+    return {"error": "Jugador no encontrado"}, 404
+
+
+@app.route("/jugador/<int:id>", methods=["DELETE"])
+def eliminar_jugador(id):
+    for j in jugadores:
+        if j["id"] == id:
+            jugadores.remove(j)
+            return {"mensaje": "Jugador eliminado"}, 200
+
+    return {"error": "Jugador no encontrado"}, 404
+```
+
+**Tabla de verificación en Postman:**
+
+| Método | URL | Body | Código esperado |
+|--------|-----|------|:----------------:|
+| `GET` | `/jugadores` | - | 200 |
+| `GET` | `/jugador/3` | - | 200 |
+| `GET` | `/jugador/99` | - | 404 |
+| `POST` | `/jugador` | `{"nombre": "James", "posicion": "MED", "seleccion": "COL"}` | 201 |
+| `POST` | `/jugador` | `{"nombre": ""}` | 400 |
+| `PATCH` | `/jugador/3` | `{"edad": 30}` | 200 |
+| `PATCH` | `/jugador/1` | `{"edad": -5}` | 400 |
+| `DELETE` | `/jugador/5` | - | 200 |
+| `DELETE` | `/jugador/99` | - | 404 |
+
+</details>
+
+---
+
+## 5. Frontend — ahora sí, algo que se ve bonito
 
 Hasta ahora todo lo probamos con Postman. Y está bien, Postman es el amigo fiel del backend. Pero una API no vive para Postman — vive para que **otros programas** la consuman.
 
-Hoy creamos un frontend en HTML plano que se conecta a nuestra API usando `fetch`. Nada de React, nada de Vue, nada de frameworks — HTML, JavaScript y ganas.
+Hoy creamos un frontend en HTML plano que se conecta a tu API usando `fetch`. Nada de React, nada de Vue, nada de frameworks — HTML, JavaScript y ganas. Porque antes de correr, hay que aprender a caminar: si no entendés cómo funciona `fetch` a pelo, después no vas a entender por qué React hace lo que hace.
 
 ### El problema del CORS (y por qué existe)
 
 Cuando tu frontend corre en `file://` o en un puerto distinto al del backend, el navegador se pone nervioso y dice "eh, esto es sospechoso" y **bloquea la petición**. No es malo, es seguridad. Pero nosotros tenemos que decirle: "tranqui, confiá".
 
-### 4A — Demo: Servir el frontend DESDE Flask (sin vueltas)
+Hay dos formas de resolverlo:
+1. **Servir el HTML desde Flask** → mismo origen, cero CORS (la que usamos hoy)
+2. **Usar flask-cors** → permitir explícitamente que otro origen hable con tu API (la que usarías en producción)
+
+Nosotros vamos con la primera porque es más simple y no agrega conceptos que hoy no necesitamos.
+
+### 5A — Demo: Servir el frontend DESDE Flask (sin vueltas)
 
 La solución más limpia: que Flask sirva el HTML. Mismo origen, cero CORS, cero problemas.
 
@@ -301,7 +557,7 @@ Primero, instalá Flask-CORS por si acaso:
 pip install flask-cors
 ```
 
-Después, actualizá `app.py`:
+Después, actualizá `app.py` para que sirva el archivo HTML:
 
 ```python
 from flask import Flask, request, send_from_directory
@@ -355,25 +611,27 @@ Ahora creá un archivo `index.html` en la **misma carpeta** que `app.py`:
 
 Ahora andá a `http://127.0.0.1:5000/`. ¿Qué ves? **Tu frontend.** Servido por Flask. Mismo origen, cero configuraciones raras, cero dolores de cabeza.
 
+Hacé click en "Cargar Jugadores" y los ves aparecer en la lista. Eso que acaba de pasar es exactamente lo mismo que cuando hacés `GET /jugadores` en Postman — solo que ahora lo hizo el navegador, y vos ves el resultado en una interfaz.
+
 ---
 
-### 4B — Reto: Mejorá el frontend
+### 5B — Reto: Mejorá el frontend
 
 Agregale al `index.html`:
 
-1. Un campo de texto para buscar por **nombre** (input + botón). Cuando escribas y des click, llamá a un endpoint de búsqueda... esperá, no tenemos endpoint de búsqueda por nombre. Agregá uno:
+1. Un campo de texto para buscar por **nombre** (input + botón). Cuando escribas y des click, llamá a un endpoint de búsqueda... esperá, no tenemos endpoint de búsqueda por nombre. Agregá uno en `app.py`:
 
 ```
 GET /buscar-por-nombre?q=Paolo
 ```
 
-2. Mostrá los resultados en una tabla (no en lista) con columnas: Nombre, Edad, Posición, Equipo, Selección
+2. Mostrá los resultados en una **tabla** (no en lista) con columnas: Nombre, Edad, Posición, Equipo, Selección
 3. Si no hay resultados, mostrá "No se encontraron jugadores"
 
 <details>
 <summary><b>Solución (reto)</b></summary>
 
-**En `app.py`**, agregá:
+**En `app.py`**, agregá el endpoint de búsqueda:
 
 ```python
 @app.route("/buscar-por-nombre")
@@ -390,7 +648,7 @@ def buscar_por_nombre():
     return resultado
 ```
 
-**En `index.html`:**
+**En `index.html`**, reemplazá todo el contenido con esto:
 
 ```html
 <!DOCTYPE html>
@@ -399,8 +657,8 @@ def buscar_por_nombre():
     <meta charset="UTF-8">
     <title>Jugadores del Mundial 2026</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        input, button { padding: 8px; margin-right: 5px; }
+        body { font-family: Arial, sans-serif; margin: 20px; max-width: 900px; }
+        input, button { padding: 8px; margin: 3px; }
         table { border-collapse: collapse; width: 100%; margin-top: 10px; }
         th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
         th { background: #1a3a5c; color: white; }
@@ -491,15 +749,22 @@ def buscar_por_nombre():
 
 </details>
 
+<p align="center">
+  <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='300' viewBox='0 0 600 300'%3E%3Crect width='600' height='300' fill='%23f0f0f0'/%3E%3Ctext x='200' y='50' font-family='monospace' font-size='16' fill='%23333' text-anchor='middle' font-weight='bold'%3EARQUITECTURA:%20Frontend%20+%20Backend%3C/text%3E%3Crect x='50' y='80' width='200' height='150' rx='10' fill='%233498db'/%3E%3Ctext x='150' y='130' font-family='monospace' font-size='14' fill='white' text-anchor='middle'%3ENavegador%3C/text%3E%3Ctext x='150' y='155' font-family='monospace' font-size='12' fill='%23d4e6f1' text-anchor='middle'%3Eindex.html%3C/text%3E%3Ctext x='150' y='180' font-family='monospace' font-size='12' fill='%23d4e6f1' text-anchor='middle'%3Efetch()%3C/text%3E%3Crect x='350' y='80' width='200' height='150' rx='10' fill='%2327ae60'/%3E%3Ctext x='450' y='130' font-family='monospace' font-size='14' fill='white' text-anchor='middle'%3EFlask%3C/text%3E%3Ctext x='450' y='155' font-family='monospace' font-size='12' fill='%23d5f5e3' text-anchor='middle'%3Eapp.py%3C/text%3E%3Ctext x='450' y='180' font-family='monospace' font-size='12' fill='%23d5f5e3' text-anchor='middle'%3E/%20jugador/%3C/text%3E%3Crect x='350' y='200' width='200' height='30' rx='5' fill='%231e8448'/%3E%3Ctext x='450' y='220' font-family='monospace' font-size='11' fill='white' text-anchor='middle'%3ELista%20jugadores%20(memoria)%3C/text%3E%3Cline x1='250' y1='155' x2='345' y2='155' stroke='%23e74c3c' stroke-width='3' marker-end='url(%23arrow)'/%3E%3Ctext x='298' y='145' font-family='monospace' font-size='10' fill='%23e74c3c' text-anchor='middle'%3EGET/POST%3C/text%3E%3Cdefs%3E%3Cmarker id='arrow' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='6' markerHeight='6' orient='auto'%3E%3Cpath d='M0,0 L10,5 L0,10 z' fill='%23e74c3c'/%3E%3C/marker%3E%3C/defs%3E%3C/svg%3E" alt="Diagrama de arquitectura Frontend + Backend" width="600">
+</p>
+<p align="center"><sub><i>El navegador (HTML + JS) le habla a Flask (Python). Flask responde con datos. Todo en el mismo puerto.</i></sub></p>
+
 ---
 
-## 5. CRUD desde el navegador — el frontend completo
+## 6. CRUD desde el navegador — el frontend completo
 
 Ahora viene lo bueno. Ya tenemos la API que hace CRUD. Ya tenemos un frontend que muestra datos. Es hora de **unir todo** y crear, editar y eliminar jugadores directamente desde el navegador. Sin Postman, sin terminal — todo desde la interfaz.
 
-### 5A — Demo: Agregar jugador desde el frontend
+Esto es lo que hace que un backend cobre vida. Porque una API que solo se prueba con Postman es como un motor fuera del auto — corre, hace ruido, pero no lleva a nadie a ningún lado. Cuando conectás el frontend, el auto empieza a andar.
 
-Agregá esto al `index.html`:
+### 6A — Demo: Agregar jugador desde el frontend
+
+Agregá esto al `index.html` (después de la tabla):
 
 ```html
 <h2>Agregar jugador</h2>
@@ -512,6 +777,8 @@ Agregá esto al `index.html`:
     <button type="submit">Agregar</button>
 </form>
 ```
+
+Y esto al `script`:
 
 ```javascript
 document.getElementById("form-crear").addEventListener("submit", async (e) => {
@@ -535,11 +802,11 @@ document.getElementById("form-crear").addEventListener("submit", async (e) => {
 });
 ```
 
-Agregá esto al HTML (después de la tabla) y al script. Cuando creés un jugador desde el formulario, la tabla se actualiza automáticamente.
+Cuando creés un jugador desde el formulario, la tabla se actualiza automáticamente. Sin recargar la página. Sin magia — es `fetch()` con POST, y cuando el servidor responde 201, llamás a `cargarJugadores()` de nuevo.
 
 ---
 
-### 5B — Reto: CRUD completo en frontend
+### 6B — Reto: CRUD completo en frontend
 
 Agregá al `index.html`:
 
@@ -552,7 +819,7 @@ Agregá al `index.html`:
 
 3. Mostrá los **códigos de error** del servidor (400, 404) en la interfaz, no solo con `alert()`.
 
-> **Pista:** para el botón eliminar, necesitás el ID de cada jugador. Modificá `mostrarJugadores()` para guardar el ID en un atributo `data-id` de la fila.
+> **Pista:** para el botón eliminar, necesitás el ID de cada jugador. Modificá `mostrarJugadores()` para guardar el ID en un atributo `data-id` de la fila. Para la edición inline, cada celda editable necesita su propio `data-campo`.
 
 <details>
 <summary><b>Solución (reto)</b></summary>
@@ -771,9 +1038,9 @@ Agregá al `index.html`:
 
 ---
 
-## 6. Proyecto final — el desafío que separa a los que entienden de los que solo copian
+## 7. Proyecto final — el desafío que separa a los que entienden de los que solo copian
 
-### 6A — Demo: La arquitectura completa (mirá TODO lo que construimos)
+### 7A — Demo: La arquitectura completa (mirá TODO lo que construimos)
 
 Pará un toque y mirá esto:
 
@@ -791,20 +1058,24 @@ Flask (app.py) ──► jugadores (lista de diccionarios en memoria)
 
 ¿Te das cuenta? **Todo vive en una sola URL** (`http://127.0.0.1:5000`). Flask sirve el frontend Y expone la API. Sin CORS, sin configuraciones raras, sin magia. Solo código que vos escribiste.
 
-Hiciste un backend completo, con frontend incluido, que hace CRUD. Eso no es poco, causa.
+Hiciste un backend completo, con frontend incluido, que hace CRUD. Eso no es poco, causa. En 2 días pasaste de "hola mundo" a tener una API funcional con interfaz gráfica. La mayoría de la gente paga cursos enteros para llegar a esto.
 
 ---
 
-### 6B — Reto final: Extendé la API con equipos (el que hace esto, ya la tiene clara)
+### 7B — Reto final: Extendé la API con equipos
 
 Ahora que tenés el CRUD de jugadores funcionando como un campeón, agregá un nuevo recurso: **Equipos de fútbol**. Porque un jugador sin equipo es como un backend sin endpoints — no funciona.
 
-1. Creá un diccionario `equipos` con data así:
+1. Creá una lista `equipos` con data así:
+
 ```python
-equipos = {
-    1: {"nombre": "Real Madrid", "pais": "España", "liga": "La Liga", "copas": 15},
-    2: {"nombre": "Liverpool", "pais": "Inglaterra", "liga": "Premier League", "copas": 6},
-}
+equipos = [
+    {"id": 1, "nombre": "Real Madrid", "pais": "España", "liga": "La Liga", "copas": 15},
+    {"id": 2, "nombre": "Liverpool", "pais": "Inglaterra", "liga": "Premier League", "copas": 6},
+    {"id": 3, "nombre": "Alianza Lima", "pais": "Perú", "liga": "Liga 1", "copas": 25},
+    {"id": 4, "nombre": "Inter Miami", "pais": "EE.UU.", "liga": "MLS", "copas": 0},
+    {"id": 5, "nombre": "Al Hilal", "pais": "Arabia Saudita", "liga": "Saudi League", "copas": 18},
+]
 ```
 
 2. Implementá el CRUD completo para equipos (GET todos, GET por ID, POST, PATCH, DELETE)
@@ -821,8 +1092,8 @@ equipos = {
 No te voy a dar la solución completa porque este es el ejercicio que separa a los que entienden de los que copian y pegan. Pero te tiro unos tips:
 
 - Los endpoints de equipos son IDÉNTICOS en estructura a los de jugadores. Literalmente podés copiar y pegar, cambiar "jugador" por "equipo", y funciona.
-- Para el punto 3, vas a necesitar un endpoint `GET /equipos` que devuelva un diccionario clave=nombre, valor=datos. Después en el frontend, cuando mostrés jugadores, buscá el equipo por nombre.
-- Para el `<select>`, hacé un `fetch` a la API de equipos cuando cargue la página y llená las opciones.
+- Para el punto 3, vas a necesitar buscar el equipo por nombre dentro del bucle de jugadores. Cuando armás la respuesta, en vez de poner `j["equipo"]`, poné el objeto completo del equipo que encontraste.
+- Para el `<select>`, hacé un `fetch` a la API de equipos cuando cargue la página y llená las opciones con un `forEach`.
 
 Si te trabás, preguntá. Pero primero intentá. La diferencia entre un dev que sabe y uno que no, es que el primero **prueba antes de preguntar**.
 
@@ -834,11 +1105,15 @@ Si te trabás, preguntá. Pero primero intentá. La diferencia entre un dev que 
 
 | Tema | Demo | Reto | Conceptos clave |
 |------|:----:|:----:|-----------------|
-| 1. CRUD completo | ✅ | ✅ | GET, POST, PUT/PATCH, DELETE |
-| 2. Validación de datos | ✅ | ✅ | Códigos 400, validar campos |
-| 3. PUT vs PATCH | ✅ | ✅ | Reemplazo vs actualización parcial |
-| 4. Frontend con fetch | ✅ | ✅ | `fetch()`, `GET`, HTML dinámico |
-| 5. Servir HTML desde Flask | ✅ | ✅ | `send_from_directory()`, CORS |
-| 6. CRUD desde frontend | ✅ | ✅ | POST/PATCH/DELETE con fetch |
-| 7. Edición inline | ✅ | ✅ | Eventos de DOM, actualización parcial |
-| 8. Proyecto integrador | ✅ | ✅ | CRUD completo funcional |
+| 0. ¿Qué es CRUD? | — | — | POST=crear, GET=leer, PATCH=actualizar, DELETE=borrar |
+| 1. READ | ✅ | ✅ | `@app.route()`, `GET`, ruta con `<int:id>`, 404 |
+| 2. CREATE | ✅ | ✅ | `POST`, `request.json`, validación, código 201 |
+| 3. UPDATE (PATCH) | ✅ | ✅ | Reemplazo vs actualización parcial, validar tipo/rango |
+| 4. DELETE | ✅ | ✅ | `DELETE`, `jugadores.remove()`, 404 si no existe |
+| 5. Frontend + fetch | ✅ | ✅ | `fetch()`, `send_from_directory()`, HTML dinámico |
+| 6. CRUD desde frontend | ✅ | ✅ | POST/PATCH/DELETE con fetch, edición inline |
+| 7. Proyecto integrador | ✅ | ✅ | CRUD completo frontend + backend + equipos |
+
+---
+
+<sub>Créditos de imágenes: logos de HTML5, JavaScript, Flask, Postman y JSON, y diagrama cliente-servidor, servidos desde Wikimedia Commons. Los logos son marcas de sus respectivos dueños y se usan solo con fines educativos de identificación. Diagrama de arquitectura generado a modo ilustrativo.</sub>
