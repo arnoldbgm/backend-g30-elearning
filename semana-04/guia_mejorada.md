@@ -5,9 +5,11 @@
   &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Python-logo-notext.svg?width=90" alt="Logo de Python" height="80">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Pgadmin-logo.svg?width=220" alt="Logo de pgAdmin" height="80">
 </p>
 
+<p align="center">
+  <img height="498" alt="image" src="https://github.com/user-attachments/assets/c1771d45-e2fc-471b-bb6f-e2ec71706467" />
+</p>
 Bienvenidos al día más importante del curso. Hasta ahora todo lo que construían en Python vivía en listas de diccionarios que desaparecían al apagar el servidor. Eso se acabó. Hoy aprendemos a **persistir datos como profesionales**.
 
 Vamos a usar **PostgreSQL**, el motor de base de datos open source más potente del planeta. Y todo alrededor del **Mundial 2026** — selecciones (equipos), jugadores, partidos, goles, y tabla de posiciones. Nada de tablas de ejemplo sin sentido. Esto es datos de verdad.
