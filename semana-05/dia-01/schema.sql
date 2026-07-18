@@ -87,7 +87,7 @@ INSERT INTO canciones (titulo, album, duracion_segundos, anio_lanzamiento, artis
 
     -- Bon Jovi (id=9)
     ('Livin on a Prayer', 'Slippery When Wet', 245, 1986, 9),
-    ('It's My Life', 'Crush', 225, 2000, 9),
+    ('It s My Life', 'Crush', 225, 2000, 9),
     ('Wanted Dead or Alive', '7800° Fahrenheit', 270, 1987, 9),
 
     -- Kiss (id=10)
