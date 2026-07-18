@@ -61,6 +61,17 @@ def get_artistas():
     # from flask import jsonify
     return jsonify(resultado_formateado)
 
+# Se solicita un endpoint, para poder obteenr un solo artista => /artistas/<id>
+# Este endpoint tiene que ser del tipo GET
+@app.route("/artistas/<int:id>", methods=["GET"])
+def get_single_artista(id):
+    artista = Artistas.query.get(id) # SELECT * FROM artistas WHERE id = 5
+    if artista is None:
+        return {
+            "msg": "El artista no existe"
+        }, 404
+    
+    return jsonify(artista.to_dic())
 
 
 # Definir Rutas - Endpoints
