@@ -81,27 +81,8 @@ Preguntas para pensar ANTES de codear:
 
 Para darles contexto, estas son las **tres tablas** que vamos a construir a lo largo del día. Hoy empiezan con `platos`, pero el destino final es este:
 
-```
-┌─────────────────────────────────┐       ┌────────────────────────────────┐
-│           clientes              │       │           platos               │
-├─────────────────────────────────┤       ├────────────────────────────────┤
-│ id       : INTEGER (PK)         │       │ id       : INTEGER (PK)        │
-│ nombre   : VARCHAR(100) NOT NULL│       │ nombre   : VARCHAR(100) NOT NULL│
-│ telefono : VARCHAR(20)  NOT NULL│       │ categoria: VARCHAR(50)  NOT NULL│
-│ direccion: VARCHAR(200) NOT NULL│       │ precio   : FLOAT        NOT NULL│
-└──────────────────────┬──────────┘       └───────────────────┬────────────┘
-                       │                                      │
-                       │    ┌─────────────────────────────┐   │
-                       └───►│          pedidos            │◄──┘
-                            ├─────────────────────────────┤
-                            │ id        : INTEGER (PK)     │
-                            │ id_cliente: INTEGER (FK)     │
-                            │ id_plato  : INTEGER (FK)     │
-                            │ cantidad  : INTEGER NOT NULL  │
-                            │ fecha     : DATETIME NOT NULL │
-                            │ total     : FLOAT    NOT NULL │
-                            └─────────────────────────────┘
-```
+<img width="787" height="297" alt="image" src="https://github.com/user-attachments/assets/82cb0d1e-f767-4af6-8539-ecdcc6129407" />
+
 
 **Profe dice:** "Este diagrama es su hoja de ruta para todo el día. Hoy empiezan con `platos`, después agregan `clientes`, y al final conectan todo con `pedidos`. Tengan esto a mano — cada vez que se pregunten '¿qué sigue?' la respuesta está acá."
 
@@ -1172,27 +1153,8 @@ Un pedido necesita:
 
 Diagrama de relaciones (el mismo de la sección 1, con tipos y nullabilidad):
 
-```
-┌─────────────────────────────────┐       ┌────────────────────────────────┐
-│           clientes              │       │           platos               │
-├─────────────────────────────────┤       ├────────────────────────────────┤
-│ id       : INTEGER (PK)         │       │ id       : INTEGER (PK)        │
-│ nombre   : VARCHAR(100) NOT NULL│       │ nombre   : VARCHAR(100) NOT NULL│
-│ telefono : VARCHAR(20)  NOT NULL│       │ categoria: VARCHAR(50)  NOT NULL│
-│ direccion: VARCHAR(200) NOT NULL│       │ precio   : FLOAT        NOT NULL│
-└──────────────────────┬──────────┘       └───────────────────┬────────────┘
-                       │                                      │
-                       │    ┌─────────────────────────────┐   │
-                       └───►│          pedidos            │◄──┘
-                            ├─────────────────────────────┤
-                            │ id        : INTEGER (PK)     │
-                            │ id_cliente: INTEGER (FK)     │
-                            │ id_plato  : INTEGER (FK)     │
-                            │ cantidad  : INTEGER NOT NULL  │
-                            │ fecha     : DATETIME NOT NULL │
-                            │ total     : FLOAT    NOT NULL │
-                            └─────────────────────────────┘
-```
+<img width="787" height="297" alt="image" src="https://github.com/user-attachments/assets/ca8c7fb1-e3bc-469c-8524-76c45e8f5e09" />
+
 
 Preguntas para pensar ANTES de codear:
 1. **Foreign Keys**: ¿cómo se escribe una FK en SQLAlchemy 2.0?
