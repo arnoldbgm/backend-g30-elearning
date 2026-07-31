@@ -11,3 +11,8 @@ class UserModel(db.Model):
     email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
 
     __tablename__ = "users"
+
+
+# flask db init
+# flask db migrate -m "COMENTARIO PROPIO"
+# flask db upgrade
