@@ -1,5 +1,8 @@
 # Guía — Día 1 (Semana 7): Empezamos el E-Commerce 🛒
 
+<img width="1434" height="788" alt="image" src="https://github.com/user-attachments/assets/a843bece-0ffc-41ee-a8c9-229242ec2c5f" />
+
+
 Hoy arrancamos el proyecto más grande del curso: una **API REST de e-commerce**. En las próximas 4 sesiones vamos a construir una tienda online de verdad, con usuarios, autenticación, productos con imágenes en la nube, y ventas con facturación electrónica.
 
 ¿El objetivo de hoy? Que tu proyecto quede parado, conectado a PostgreSQL, con sus primeras 2 tablas y su primer CRUD funcionando.
