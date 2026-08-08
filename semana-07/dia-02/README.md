@@ -1,36 +1,50 @@
-# Guía — Día 2 (Semana 8): La Venta Completa 🧾💥
+# Guía — Día 2 (Semana 7): Seguridad con JWT 🔐
 
-Llegamos al final del proyecto. Las 4 sesiones nos prepararon para ESTO: registrar una **venta** de principio a fin, como se hace en una empresa real.
+Ayer construimos los cimientos: 2 tablas y el CRUD de Categorías y Roles. Hoy le ponemos **seguridad**. ¿Qué significa eso? Que no cualquiera puede crear roles, borrar categorías, ni acceder a lo que no debe.
 
-Hoy juntamos TODO lo aprendido:
-- Los **schemas anidados** de Pydantic (el momento en que dijimos "gracias por tener schemas")
-- El **get-or-create** de clientes con `flush()` (patrón real de producción)
-- El **cálculo de IGV 18%** (el impuesto peruano)
-- La **factura electrónica** emitida por Nubefact
+**Lo que vas a lograr hoy:**
+- Usuarios registrados con contraseña cifrada (bcrypt)
+- Login que devuelve un **token JWT**
+- El CRUD de Roles protegido: sin token → 401, con token → 200
+- Respuestas de error limpias y profesionales
 
-**Analogía:** hasta hoy tenías la tienda montada (productos en el estante, clientes registrados). Hoy le pones la CAJA REGISTRADORA. Cuando alguien compra, la caja calcula, descuenta stock, y le entrega su factura.
+**Analogía:** el token JWT es como un brazalete de VIP en una fiesta. El servidor te lo da al hacer login (cuando te identificás con tu correo y contraseña). Cada vez que pedís algo, mostrás el brazalete. Sin brazalete → no entras.
 
 ---
 
-## 1. Nubefact y la dependencia requests (10 min)
+## 1. Dependencias nuevas y claves secretas (15 min)
 
-### 1A — ¿Qué es Nubefact?
+### 1A — Agregar dependencias
 
-**Nubefact** es un servicio peruano de **facturación electrónica**. Cuando vendes, tu API le manda los datos de la operación y Nubefact genera el comprobante válido para SUNAT y se lo envía al cliente por correo.
-
-Para hablar con el API de Nubefact desde Python necesitamos `requests`, el cliente HTTP de Python (sí, el mismo que usamos hace semanas).
-
-A `requirements.txt`:
+A `requirements.txt` le sumamos:
 
 ```
-requests==2.32.5
+Flask-JWT-Extended==4.7.4
+bcrypt==5.0.0
+email-validator==2.3.0
 ```
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 1B — Credenciales
+| Paquete | ¿Para qué? |
+|---------|------------|
+| `Flask-JWT-Extended` | Crear y validar tokens JWT |
+| `bcrypt` | Cifrar contraseñas |
+| `email-validator` | Validar que un correo tenga formato correcto |
+
+### 1B — Generar la clave secreta
+
+Todo lo que se firma necesita una **clave**.
+
+**Clave JWT** (firma los tokens):
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+### 1C — Actualizar `.env` y `.env.copy`
 
 `.env`:
 
@@ -38,34 +52,29 @@ pip install -r requirements.txt
 DATABASE_URL=postgresql://postgres:root@localhost:5432/flask-ecommerce
 DEBUG=True
 JWT_SECRET_KEY=982fbdeb44fdb8170d7d1de931ec72b7164d48cf2788d69724c758a471483194
-CLOUDINARY_CLOUD_NAME=du0sspuql
-CLOUDINARY_API_KEY=726516987941426
-CLOUDINARY_API_SECRET=VCZzgEtDhOuuAFxv30lZATBBYZs
-NUBEFACT_URL=https://api.nubefact.com/api/v1/99ae592e-9d4e-4961-84be-dac68239b909
-NUBEFACT_TOKEN=25f8c55909bb406eb57325bebc82dd2d1c9dd928eac54613b0ac577ca5333a1a
 ```
 
 `.env.copy`:
 
 ```
-NUBEFACT_URL=https://api.nubefact.com/api/v1/TU_TOKEN_URL
-NUBEFACT_TOKEN=TU_TOKEN_NUBEFACT
+DATABASE_URL=postgresql://postgres:TU_PASSWORD@localhost:5432/flask-ecommerce
+DEBUG=True
+JWT_SECRET_KEY=genera_uno_con_secrets.token_hex(32)
 ```
 
-> Estas son credenciales de prueba del profe. Cada empresa real tiene las suyas.
+¿Ves la diferencia? En `.env` van tus claves REALES; en `.env.copy`, la INSTRUCCIÓN de cómo generarlas. Nunca compartas tu `.env`.
 
 ---
 
-## 2. NubefactHelper — el último helper (20 min)
+## 2. utils/helpers.py — los helpers de seguridad (20 min)
 
-Agregamos `import requests` y la clase `NubefactHelper` al final de `utils/helpers.py`. Con esto, el archivo queda COMPLETO: los 3 helpers del proyecto.
+¿Te acordás del archivo `utils/helpers.py` del boilerplate? Pues ahí va TODO el código que se reutiliza. Hoy le ponemos la seguridad.
+
+Crear (o reemplazar) `utils/helpers.py`:
 
 ```python
 import os
 from bcrypt import hashpw, gensalt, checkpw
-import cloudinary
-import cloudinary.uploader
-import requests
 
 
 def hash_password(password):
@@ -74,298 +83,120 @@ def hash_password(password):
 
 def verify_password(password, hashed):
     return checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
-
-
-class CloudinaryHelper:
-    ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
-
-    @staticmethod
-    def validate_image(filename):
-        return "." in filename and filename.rsplit(".", 1)[1].lower() in CloudinaryHelper.ALLOWED_EXTENSIONS
-
-    @staticmethod
-    def upload(file_storage):
-        cloudinary.config(
-            cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-            api_key=os.getenv("CLOUDINARY_API_KEY"),
-            api_secret=os.getenv("CLOUDINARY_API_SECRET"),
-        )
-        result = cloudinary.uploader.upload(file_storage)
-        return result["secure_url"]
-
-
-class NubefactHelper:
-    @staticmethod
-    def emitir_factura(venta, cliente, detalles, email_cliente):
-        url = os.getenv("NUBEFACT_URL")
-        token = os.getenv("NUBEFACT_TOKEN")
-        headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
-
-        serie, numero = venta.correlativo.split("-")
-
-        items = []
-        for detalle in detalles:
-            items.append(
-                {
-                    "unidad_de_medida": "NIU",
-                    "codigo": detalle.producto.codigo,
-                    "descripcion": detalle.producto.nombre,
-                    "cantidad": detalle.cantidad,
-                    "valor_unitario": detalle.precio_unitario,
-                    "precio_unitario": round(detalle.precio_unitario * 1.18, 2),
-                    "subtotal": round(detalle.precio_unitario * 1.18 * detalle.cantidad, 2),
-                    "tipo_de_igv": "10",
-                    "igv": round(detalle.subtotal * 0.18, 2),
-                    "total": round(detalle.precio_unitario * 1.18 * detalle.cantidad, 2),
-                }
-            )
-
-        body = {
-            "operacion": "generar_comprobante",
-            "tipo_de_comprobante": "01",
-            "serie": serie,
-            "numero": numero,
-            "fecha_de_emision": venta.fecha.strftime("%d-%m-%Y"),
-            "cliente": {
-                "tipo_documento": "6",
-                "numero_documento": cliente.documento,
-                "razon_social": cliente.nombre,
-                "direccion": cliente.direccion,
-                "email": email_cliente,
-            },
-            "moneda": "PEN",
-            "enviar_automaticamente": True,
-            "items": items,
-            "totales": {
-                "total_gravado": venta.subtotal,
-                "total_igv": venta.igv,
-                "total": venta.total,
-            },
-        }
-
-        response = requests.post(url, json=body, headers=headers)
-        return response.json()
 ```
 
-### Desglose pieza por pieza
+### ¿Qué hace cada pieza?
 
-| Pieza | ¿Qué hace? |
-|-------|-----------|
-| `venta.correlativo.split("-")` | `"V-000001"` → serie `"V"`, número `"000001"` |
-| `for detalle in detalles:` | Construye una línea de factura por cada producto vendido |
-| `detalle.producto.codigo` | Saca el código del producto a través de la relación de SQLAlchemy |
-| `precio_unitario * 1.18` | El precio CON IGV incluido (así lo pide el formato) |
-| `requests.post(url, json=body, headers=headers)` | Envía el documento a Nubefact con el token en el header |
-| `response.json()` | La respuesta del servicio (dice si salió bien o mal) |
+| Pieza | ¿Qué hace? | ¿Cuándo se usa? |
+|-------|-----------|------------------|
+| `hash_password` | Convierte una contraseña en un hash bcrypt | Al REGISTRAR un usuario |
+| `verify_password` | Compara la contraseña escrita contra el hash guardado | Al hacer LOGIN |
 
-**Dato importante de facturación:** en el Perú, el `precio_unitario` que ve el cliente lleva IGV incluido (por eso `* 1.18`), pero el `valor_unitario` es sin IGV. En nuestra BD guardamos el precio SIN IGV. Dos formas de ver el mismo precio.
+### ¿Por qué no guardamos contraseñas en texto plano?
+
+Imaginá que un ladrón roba la base de datos de una tienda. Si las contraseñas están en texto plano, tiene acceso a todas las cuentas de todos los clientes. Con bcrypt, lo que roba es un montón de basura ilegible (`$2b$12$...`). Cada contraseña, además, tiene un **salt** (sal aleatoria), así que aunque dos usuarios usen la misma clave, los hashes son diferentes.
+
+**Regla #1 de seguridad en backend:** la contraseña del usuario NUNCA se guarda ni se responde. Solo su hash.
 
 ---
 
-## 3. Los 3 modelos (25 min)
+## 3. Modelo users (15 min)
 
-### models/customer.py
-
-```python
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Integer, String
-from db import db
-
-
-class CustomerModel(db.Model):
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    documento: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    nombre: Mapped[str] = mapped_column(String(120), nullable=False)
-    email: Mapped[str] = mapped_column(String(120), nullable=False)
-    telefono: Mapped[str] = mapped_column(String(20), nullable=False)
-    direccion: Mapped[str] = mapped_column(String(200), nullable=False)
-
-    __tablename__ = "clientes"
-```
-
-**Pregunta que seguro te hiciste:** ¿por qué tamaños tan distintos? `email` es `String(120)` (un correo real cabe de sobra), `telefono` es `String(20)` (número con código de país) y `direccion` es `String(200)`.
-
-**Respuesta:** porque los guardamos en **texto plano**, tal como llegan del frontend. El hash bcrypt lo reservamos para las contraseñas (el acceso); los datos del cliente se guardan normales, como en cualquier tienda real.
-
-### models/sale.py
-
-```python
-from datetime import datetime
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Integer, String, Float, DateTime, ForeignKey
-from db import db
-
-
-class SaleModel(db.Model):
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    correlativo: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    cliente_id: Mapped[int] = mapped_column(Integer, ForeignKey("clientes.id"), nullable=False)
-    fecha: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    subtotal: Mapped[float] = mapped_column(Float, nullable=False)
-    igv: Mapped[float] = mapped_column(Float, nullable=False)
-    total: Mapped[float] = mapped_column(Float, nullable=False)
-    estado: Mapped[str] = mapped_column(String(20), default="emitida")
-
-    cliente = db.relationship("CustomerModel", backref="ventas")
-    detalles = db.relationship("SaleDetailModel", backref="venta", cascade="all, delete-orphan")
-
-    __tablename__ = "ventas"
-```
-
-### models/sale_detail.py
+### models/user.py
 
 ```python
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Integer, Float, ForeignKey
+from sqlalchemy import Integer, String, ForeignKey
 from db import db
 
 
-class SaleDetailModel(db.Model):
+class UserModel(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    venta_id: Mapped[int] = mapped_column(Integer, ForeignKey("ventas.id"), nullable=False)
-    producto_id: Mapped[int] = mapped_column(Integer, ForeignKey("productos.id"), nullable=False)
-    cantidad: Mapped[int] = mapped_column(Integer, nullable=False)
-    precio_unitario: Mapped[float] = mapped_column(Float, nullable=False)
-    subtotal: Mapped[float] = mapped_column(Float, nullable=False)
+    nombre: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    password: Mapped[str] = mapped_column(String(200), nullable=False)
+    rol_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id"), nullable=False)
 
-    producto = db.relationship("ProductModel")
+    rol = db.relationship("RoleModel", backref="usuarios")
 
-    __tablename__ = "venta_detalles"
+    __tablename__ = "users"
 ```
 
-### El modelo mental de las relaciones
+**Desglose:**
 
-```
- clientes 1 ──── N  ventas  1 ──── N  venta_detalles  N ──── 1  productos
-```
+| Línea | ¿Qué significa? |
+|-------|-----------------|
+| `email ... unique=True` | Dos usuarios no pueden tener el mismo correo |
+| `password ... String(200)` | El hash de bcrypt ocupa 60 caracteres; 200 deja margen |
+| `ForeignKey("roles.id")` | "users.rol_id apunta a roles.id" — la relación 1:N |
+| `rol = db.relationship("RoleModel", backref="usuarios")` | `user.rol` te da el objeto Rol; `role.usuarios` te da la lista de usuarios de ese rol |
 
-- Una venta pertenece a **un** cliente. Un cliente tiene **muchas** ventas.
-- Una venta tiene **muchos** detalles. Cada detalle pertenece a **una** venta.
-- Cada detalle es de **un** producto.
+**La relación en acción:** un rol tiene muchos usuarios, y cada usuario tiene un rol. Ya estamos conectando tablas con FK, como en la semana 6 pero en nuestro proyecto grande.
 
-**`cascade="all, delete-orphan"`** es la estrella: si borras la venta, sus detalles se borran solos. Los detalles no existen sin su venta. Es "si muere el papá, mueren los hijos".
+### Importar y migrar
 
-### models/__init__.py
+`models/__init__.py`:
 
 ```python
 from .role import RoleModel
 from .category import CategoryModel
 from .user import UserModel
-from .product import ProductModel
-from .customer import CustomerModel
-from .sale import SaleModel
-from .sale_detail import SaleDetailModel
 ```
 
-### Migración
-
 ```bash
-flask db migrate -m "agregar tablas clientes, ventas y venta_detalles"
+flask db migrate -m "agregar tabla users"
 flask db upgrade
 ```
 
+**Recordá:** `flask db init` se hace una sola vez (ya lo hicimos ayer). Ahora solo `migrate` + `upgrade`.
+
 ---
 
-## 4. Los schemas anidados (20 min)
+## 4. Schemas de usuario y autenticación (15 min)
 
-Hasta hoy cada schema era plano. Hoy Pydantic muestra su verdadero poder: **un schema dentro de otro**.
-
-### schemas/customer.py
+### schemas/user.py
 
 ```python
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
-class CustomerCreate(BaseModel):
-    documento: str
+class UserCreate(BaseModel):
     nombre: str
-    email: str
-    telefono: str
-    direccion: str
+    email: EmailStr
+    password: str
+    rol_id: int
 
 
-class CustomerResponse(BaseModel):
+class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    documento: str
     nombre: str
     email: str
-    telefono: str
-    direccion: str
+    rol_id: int
 ```
 
-### schemas/sale.py
+**Mirá bien:** `UserResponse` NO tiene `password`. Aunque Pydantic lo permitiera, es una decisión de seguridad: **la contraseña jamás sale en una respuesta**. El `EmailStr` de Pydantic valida el formato del correo automáticamente (por eso instalamos `email-validator`).
+
+### schemas/auth.py
 
 ```python
-from datetime import datetime
-from pydantic import BaseModel, ConfigDict
-from .customer import CustomerCreate
+from pydantic import BaseModel, EmailStr
 
 
-class SaleDetailCreate(BaseModel):
-    producto_id: int
-    cantidad: int
+class RegisterSchema(BaseModel):
+    nombre: str
+    email: EmailStr
+    password: str
+    rol_id: int
 
 
-class SaleCreate(BaseModel):
-    cliente: CustomerCreate
-    detalles: list[SaleDetailCreate]
-
-
-class SaleDetailResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    producto_id: int
-    cantidad: int
-    precio_unitario: float
-    subtotal: float
-
-
-class SaleResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    correlativo: str
-    cliente_id: int
-    fecha: datetime
-    subtotal: float
-    igv: float
-    total: float
-    estado: str
-    detalles: list[SaleDetailResponse]
+class LoginSchema(BaseModel):
+    email: EmailStr
+    password: str
 ```
 
-### El JSON que valida `SaleCreate`
-
-```json
-{
-  "cliente": {
-    "documento": "20100039212",
-    "nombre": "Empresa SAC",
-    "email": "ventas@empresa.com",
-    "telefono": "987654321",
-    "direccion": "Av. Lima 123"
-  },
-  "detalles": [
-    { "producto_id": 1, "cantidad": 2 }
-  ]
-}
-```
-
-**Mirá lo que logra una sola línea** (`SaleCreate(**request.get_json())`):
-
-| Si el cliente manda... | Pydantic responde |
-|------------------------|-------------------|
-| Falta el documento del cliente | Error 400 con el detalle |
-| `cantidad: "dos"` (texto en vez de número) | Error 400 |
-| `detalles: {}` en vez de lista | Error 400 |
-| Un campo extra que no existe | Error 400 |
-
-Todo en cascada, todo automático. **ESTE era el momento en que "Pydantic parece exagerado con 2 campos".**
-
-**¿Por qué `SaleDetailCreate` no tiene precio?** Porque el precio NO lo manda el cliente. Lo calcula el servidor con el precio guardado del producto. Nunca confíes en el precio que te envía el frontend.
+**¿Por qué otro schema si ya existe `UserCreate`?** Porque son flujos distintos: registrarse (RegisterSchema) e iniciar sesión (LoginSchema). Separarlos permite que evolucionen por separado sin romperse entre sí. En proyectos reales esta pequeña redundancia es normal y deseable.
 
 ### schemas/__init__.py
 
@@ -374,211 +205,191 @@ from .auth import RegisterSchema, LoginSchema
 from .role import RoleCreate, RoleResponse
 from .category import CategoryCreate, CategoryResponse
 from .user import UserCreate, UserResponse
-from .product import ProductCreate, ProductResponse
-from .customer import CustomerCreate, CustomerResponse
-from .sale import SaleCreate, SaleResponse
 ```
 
 ---
 
-## 5. El Resource de ventas (50 min)
+## 5. JWT en app.py (25 min)
 
-### resources/saleResource.py
+### 5A — ¿Qué es un JWT?
+
+**JSON Web Token**: un pase de entrada firmado digitalmente. Cuando haces login, el servidor te lo entrega. Tiene 3 partes separadas por puntos:
+
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjox... .FirmaFirma
+```
+
+1. **Header** — dice qué algoritmo se usó para firmar
+2. **Payload** — los datos (quién sos, cuándo expira)
+3. **Firma** — la garantía de que nadie lo modificó
+
+**La magia:** el servidor NO necesita buscar en la BD quién sos cada vez. Verifica la firma con su clave secreta y listo. Si alguien intenta cambiar el payload, la firma no coincide y el token se rechaza.
+
+### 5B — Modificar app.py
+
+```python
+# Punto de entrada de la aplicación.
+# Acá se configura Flask, la base de datos, las migraciones,
+# el JWT y se registran las rutas.
+import os
+from dotenv import load_dotenv
+from flask import Flask
+from db import db
+from flask_migrate import Migrate
+from flask_restful import Api
+from flask_jwt_extended import JWTManager
+from flask_jwt_extended.exceptions import JWTExtendedException
+from jwt import PyJWTError
+
+load_dotenv()
+
+app = Flask(__name__)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///dev.db")
+app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "secret")
+
+db.init_app(app)
+migrate = Migrate(app, db)
+
+
+# Flask-RESTful intercepta TODAS las excepciones de sus rutas.
+# Esta subclase re-lanza los errores de JWT para que los maneje
+# Flask con los callbacks de abajo y la respuesta sea un 401 limpio.
+class EcommerceApi(Api):
+    def handle_error(self, e):
+        if isinstance(e, (JWTExtendedException, PyJWTError)):
+            raise e
+        return super().handle_error(e)
+
+
+api = EcommerceApi(app)
+jwt = JWTManager(app)
+
+
+@jwt.unauthorized_loader
+def falta_token(mensaje):
+    return {"msg": "Token faltante o inválido"}, 401
+
+
+@jwt.invalid_token_loader
+def token_invalido(mensaje):
+    return {"msg": "Token inválido o expirado"}, 401
+
+
+@jwt.expired_token_loader
+def token_expirado(header, payload):
+    return {"msg": "Token expirado"}, 401
+
+from router import register_routes
+
+register_routes(api)
+
+if __name__ == "__main__":
+    app.run(debug=os.getenv("DEBUG", "True").lower() == "true")
+```
+
+### 5C — El bug que nos obligó a hacer todo esto
+
+Este es UNO de los errores más valiosos de todo el curso. Mirá lo que pasa:
+
+1. Agregas `@jwt_required()` a un endpoint
+2. Lo pides SIN token en Postman
+3. Resultado: **500** con un traceback gigante en la terminal 😱
+
+**¿Qué pasó?** Resulta que **Flask-RESTful intercepta TODAS las excepciones** que ocurren dentro de sus `Resource` y las convierte en un 500 genérico. Los errores de JWT (token faltante, inválido, expirado) caen en esa trampa. ¿La solución?
+
+| Pieza | Qué hace |
+|-------|----------|
+| `class EcommerceApi(Api)` | Subclase de `Api`. Su `handle_error` re-lanza los errores de JWT (no los convierte en 500); todo lo demás se maneja normal |
+| `api = EcommerceApi(app)` | Usamos nuestra subclase en vez de `Api(app)` |
+| `@jwt.unauthorized_loader` | Cuando no hay token → "Token faltante o inválido" (401) |
+| `@jwt.invalid_token_loader` | Cuando el token es basura → "Token inválido o expirado" (401) |
+| `@jwt.expired_token_loader` | Cuando el token venció → "Token expirado" (401) |
+
+**Resultado:** en vez de un 500 feo con traceback, el cliente recibe un 401 limpio y entendible. Eso es lo que pasa en APIs de producción: **el cliente jamás debe ver un traceback**.
+
+---
+
+## 6. Register y Login (30 min)
+
+### resources/authResource.py
 
 ```python
 from flask_restful import Resource
 from flask import request
 from pydantic import ValidationError
 from db import db
-from models.sale import SaleModel
-from models.sale_detail import SaleDetailModel
-from models.customer import CustomerModel
-from models.product import ProductModel
-from schemas.sale import SaleCreate, SaleResponse
-from utils.helpers import NubefactHelper
-
-IGV = 0.18
+from flask_jwt_extended import create_access_token
+from models.user import UserModel
+from models.role import RoleModel
+from schemas.auth import RegisterSchema, LoginSchema
+from schemas.user import UserResponse
+from utils.helpers import hash_password, verify_password
 
 
-def generar_correlativo():
-    ultima = SaleModel.query.order_by(SaleModel.id.desc()).first()
-    numero = (ultima.id + 1) if ultima else 1
-    return "V-" + str(numero).zfill(6)
-
-
-class SaleResource(Resource):
-    def get(self):
-        ventas = SaleModel.query.all()
-        return [SaleResponse.model_validate(v).model_dump(mode="json") for v in ventas], 200
-
+class RegisterResource(Resource):
     def post(self):
         try:
-            data = SaleCreate(**request.get_json())
+            data = RegisterSchema(**request.get_json())
         except ValidationError as e:
             return {"msg": "Datos inválidos", "errores": e.errors()}, 400
 
-        cliente = CustomerModel.query.filter_by(documento=data.cliente.documento).first()
-        if not cliente:
-            cliente = CustomerModel(
-                documento=data.cliente.documento,
-                nombre=data.cliente.nombre,
-                email=data.cliente.email,
-                telefono=data.cliente.telefono,
-                direccion=data.cliente.direccion,
-            )
-            db.session.add(cliente)
-            db.session.flush()
+        if UserModel.query.filter_by(email=data.email).first():
+            return {"msg": "El correo ya está registrado"}, 409
 
-        subtotal = 0
-        detalles = []
-        for item in data.detalles:
-            product = db.session.get(ProductModel, item.producto_id)
-            if not product:
-                return {"msg": "Producto no encontrado"}, 404
-            if product.stock < item.cantidad:
-                return {"msg": "Stock insuficiente"}, 400
+        if not db.session.get(RoleModel, data.rol_id):
+            return {"msg": "El rol no existe"}, 404
 
-            line_subtotal = product.precio * item.cantidad
-            subtotal = subtotal + line_subtotal
-            product.stock = product.stock - item.cantidad
-
-            detalles.append(
-                SaleDetailModel(
-                    producto_id=product.id,
-                    cantidad=item.cantidad,
-                    precio_unitario=product.precio,
-                    subtotal=line_subtotal,
-                )
-            )
-
-        igv = round(subtotal * IGV, 2)
-        total = round(subtotal + igv, 2)
-
-        venta = SaleModel(
-            correlativo=generar_correlativo(),
-            cliente_id=cliente.id,
-            subtotal=round(subtotal, 2),
-            igv=igv,
-            total=total,
+        user = UserModel(
+            nombre=data.nombre,
+            email=data.email,
+            password=hash_password(data.password),
+            rol_id=data.rol_id,
         )
-        venta.detalles = detalles
-        db.session.add(venta)
+        db.session.add(user)
         db.session.commit()
 
-        factura = NubefactHelper.emitir_factura(venta, cliente, detalles, cliente.email)
-        venta.estado = "emitida" if factura.get("success") else "pendiente"
-        db.session.commit()
+        return UserResponse.model_validate(user).model_dump(mode="json"), 201
 
-        response = SaleResponse.model_validate(venta).model_dump(mode="json")
-        response["factura"] = factura
-        return response, 201
+
+class LoginResource(Resource):
+    def post(self):
+        try:
+            data = LoginSchema(**request.get_json())
+        except ValidationError as e:
+            return {"msg": "Datos inválidos", "errores": e.errors()}, 400
+
+        user = UserModel.query.filter_by(email=data.email).first()
+        if not user or not verify_password(data.password, user.password):
+            return {"msg": "Credenciales inválidas"}, 401
+
+        token = create_access_token(identity=str(user.id))
+        return {
+            "access_token": token,
+            "usuario": UserResponse.model_validate(user).model_dump(mode="json"),
+        }, 200
 ```
 
-### Paso 1 — El correlativo
+### Desglose de Register paso a paso
 
-```python
-def generar_correlativo():
-    ultima = SaleModel.query.order_by(SaleModel.id.desc()).first()
-    numero = (ultima.id + 1) if ultima else 1
-    return "V-" + str(numero).zfill(6)
-```
+1. **Valida** el JSON con `RegisterSchema` → si falta un campo o el correo está mal, Pydantic responde con `errores` detallados → **400**
+2. **¿El correo ya existe?** → **409** "El correo ya está registrado"
+3. **¿Existe el rol?** → **404** "El rol no existe". No dejas crear un usuario con un rol que no existe en la BD
+4. **Crea el usuario** con `hash_password(data.password)` — acá está la magia: el hash entra a la BD, la contraseña jamás
+5. **Responde** `UserResponse` (sin contraseña) → **201**
 
-- `order_by(SaleModel.id.desc()).first()` → la venta con el id más alto (la última)
-- Si no hay ventas → `numero = 1`; si hay → `ultima.id + 1`
-- `zfill(6)` → `"000001"`, y con el prefijo → `"V-000001"`
+### Desglose de Login paso a paso
 
-**¿Diferencia con el código de productos?** En productos usamos `count()` (porque nunca borramos, solo desactivamos). Acá usamos `ultima.id + 1` (porque el correlativo de la factura debe seguir la secuencia real). Dos problemas, dos soluciones.
+1. **Valida** con `LoginSchema` → **400** si falla
+2. **Busca el usuario** por email. Fijate la condición:
+   ```python
+   if not user or not verify_password(data.password, user.password):
+   ```
+   O el usuario no existe, O la contraseña no coincide → mismo mensaje **401** "Credenciales inválidas". ¿Por qué igual? Para que un atacante no pueda saber qué correos están registrados.
+3. **Genera el token** con `create_access_token(identity=str(user.id))`. El `identity` es el dato que el servidor leerá después de cada petición para saber quién es.
+4. **Responde** con `access_token` + los datos del usuario → **200**
 
-### Paso 2 — Validación anidada
-
-```python
-data = SaleCreate(**request.get_json())
-```
-
-Una línea. Cliente completo + toda la lista de detalles, validados. Eso es Pydantic en su salsa.
-
-### Paso 3 — Get-or-create del cliente
-
-```python
-cliente = CustomerModel.query.filter_by(documento=data.cliente.documento).first()
-if not cliente:
-    cliente = CustomerModel(
-        ...,
-        email=data.cliente.email,
-        telefono=data.cliente.telefono,
-        ...
-    )
-    db.session.add(cliente)
-    db.session.flush()
-```
-
-**Patrón get-or-create:** buscamos por documento. Si existe, lo reutilizamos. Si no, lo creamos.
-
-Detalle fino:
-- `flush()` vs `commit()` → `flush()` envía el INSERT para generar el `id`, pero NO lo confirma. Si después algo falla (ej: stock insuficiente), todo se deshace y no queda un cliente huérfano. El `commit()` de verdad lo hacemos al final.
-
-### Paso 4 — El bucle de detalles
-
-```python
-for item in data.detalles:
-    product = db.session.get(ProductModel, item.producto_id)
-    if not product:
-        return {"msg": "Producto no encontrado"}, 404
-    if product.stock < item.cantidad:
-        return {"msg": "Stock insuficiente"}, 400
-
-    line_subtotal = product.precio * item.cantidad
-    subtotal = subtotal + line_subtotal
-    product.stock = product.stock - item.cantidad
-```
-
-Por cada línea:
-1. **¿Existe el producto?** → 404
-2. **¿Hay stock suficiente?** → 400. La validación de stock es OBLIGATORIA antes de vender
-3. Calcula el subtotal de la línea y lo **acumula** (variable acumuladora, como en la semana 1)
-4. **Descuenta el stock** modificando `product.stock`
-
-### Paso 5 — IGV y la venta
-
-```python
-igv = round(subtotal * IGV, 2)
-total = round(subtotal + igv, 2)
-```
-
-**La cuenta del impuesto peruano:**
-
-| Concepto | Fórmula | Ejemplo |
-|----------|---------|---------|
-| Subtotal | — | 7000.00 |
-| IGV (18%) | `subtotal * 0.18` | 1260.00 |
-| Total | `subtotal + igv` | 8260.00 |
-
-`round(x, 2)` redondea a 2 decimales (céntimos), porque en dinero no se puede dejar 8260.123.
-
-### Paso 6 — La línea más mágica del curso
-
-```python
-venta.detalles = detalles
-db.session.add(venta)
-db.session.commit()
-```
-
-**`venta.detalles = detalles`** le dice a SQLAlchemy: "esta venta tiene estos detalles". Gracias a la relación y al `cascade`, UN SOLO commit guarda la venta Y todas sus líneas. No hay que insertar cada detalle a mano.
-
-### Paso 7 — Facturar
-
-```python
-factura = NubefactHelper.emitir_factura(venta, cliente, detalles, cliente.email)
-venta.estado = "emitida" if factura.get("success") else "pendiente"
-db.session.commit()
-```
-
-1. **Le pasamos el email en texto plano** — Nubefact lo necesita para mandarle la factura al cliente
-2. Llamamos a Nubefact
-3. Si respondió `success: true` → `estado = "emitida"`. Si falló → `"pendiente"` (la venta no se pierde, queda para reintentar)
-4. La respuesta de Nubefact viaja en la respuesta final
-
-### Registrar la ruta
+### Registrar las rutas
 
 `resources/__init__.py`:
 
@@ -586,22 +397,13 @@ db.session.commit()
 from .authResource import RegisterResource, LoginResource
 from .roleResource import RoleResource
 from .categoryResource import CategoryResource
-from .productResource import ProductResource
-from .saleResource import SaleResource
 ```
 
 `router/__init__.py`:
 
 ```python
 from flask_restful import Api
-from resources import (
-    RegisterResource,
-    LoginResource,
-    RoleResource,
-    CategoryResource,
-    ProductResource,
-    SaleResource,
-)
+from resources import RegisterResource, LoginResource, RoleResource, CategoryResource
 
 
 def register_routes(api: Api):
@@ -609,77 +411,145 @@ def register_routes(api: Api):
     api.add_resource(LoginResource, "/api/auth/login")
     api.add_resource(RoleResource, "/api/roles")
     api.add_resource(CategoryResource, "/api/categorias")
-    api.add_resource(ProductResource, "/api/productos")
-    api.add_resource(SaleResource, "/api/ventas")
 ```
 
 ---
 
-## 6. Pruebas en Postman (35 min)
+## 7. Proteger Roles con @jwt_required() (25 min)
 
-### Preparar
+Llegó el momento. El CRUD de Roles es **solo para autenticados**. ¿Cuánto código nuevo se necesita? Un decorador por método.
 
-Necesitás al menos un producto con stock. Si no tenés, créalo con POST `/api/productos` (recordá: form-data + imagen).
+### resources/roleResource.py
 
-### Registrar una venta (POST)
+```python
+from flask_restful import Resource
+from flask import request
+from pydantic import ValidationError
+from db import db
+from flask_jwt_extended import jwt_required
+from models.role import RoleModel
+from schemas.role import RoleCreate, RoleResponse
 
-- **POST** `http://127.0.0.1:5000/api/ventas`
+
+class RoleResource(Resource):
+    @jwt_required()
+    def get(self):
+        roles = RoleModel.query.all()
+        return [RoleResponse.model_validate(r).model_dump(mode="json") for r in roles], 200
+
+    @jwt_required()
+    def post(self):
+        try:
+            data = RoleCreate(**request.get_json())
+        except ValidationError as e:
+            return {"msg": "Datos inválidos", "errores": e.errors()}, 400
+
+        if RoleModel.query.filter_by(nombre=data.nombre).first():
+            return {"msg": "El rol ya existe"}, 409
+
+        role = RoleModel(nombre=data.nombre, descripcion=data.descripcion)
+        db.session.add(role)
+        db.session.commit()
+
+        return RoleResponse.model_validate(role).model_dump(mode="json"), 201
+
+    @jwt_required()
+    def put(self):
+        data = request.get_json()
+        role = db.session.get(RoleModel, data.get("id"))
+        if not role:
+            return {"msg": "Rol no encontrado"}, 404
+
+        try:
+            validated = RoleCreate(**data)
+        except ValidationError as e:
+            return {"msg": "Datos inválidos", "errores": e.errors()}, 400
+
+        role.nombre = validated.nombre
+        role.descripcion = validated.descripcion
+        db.session.commit()
+
+        return RoleResponse.model_validate(role).model_dump(mode="json"), 200
+
+    @jwt_required()
+    def delete(self):
+        data = request.get_json()
+        role = db.session.get(RoleModel, data.get("id"))
+        if not role:
+            return {"msg": "Rol no encontrado"}, 404
+
+        db.session.delete(role)
+        db.session.commit()
+
+        return {"msg": "Rol eliminado"}, 200
+```
+
+**Lo único que cambió** respecto al Día 1: `@jwt_required()` arriba de cada método. Así de fácil es proteger un endpoint en producción.
+
+> **Nota:** las Categorías siguen públicas. ¿Por qué? Porque un catálogo es información que todos deberían ver. Los Roles son configuración interna: solo el equipo la toca. Aprende a decidir QUÉ proteger y QUÉ no.
+
+---
+
+## 8. Pruebas en Postman (35 min)
+
+### 8A — Registrar un usuario
+
+- **POST** `http://127.0.0.1:5000/api/auth/register`
 - Body → raw → JSON:
 
 ```json
 {
-  "cliente": {
-    "documento": "20100039212",
-    "nombre": "Empresa SAC",
-    "email": "ventas@empresa.com",
-    "telefono": "987654321",
-    "direccion": "Av. Lima 123"
-  },
-  "detalles": [
-    { "producto_id": 1, "cantidad": 2 }
-  ]
+    "nombre": "Carlos",
+    "email": "carlos@correo.com",
+    "password": "clave123",
+    "rol_id": 1
 }
 ```
 
-Resultado esperado: **201** con `correlativo: "V-000001"`, `subtotal`, `igv`, `total`, `estado` y `factura` (la respuesta de Nubefact).
+**Requisito:** el rol con `id: 1` debe existir. Si no, créalo con POST `/api/roles` (todavía está público).
 
-**Verificá la cuenta a mano** (con precio 3500 y cantidad 2):
+Resultado: **201** con los datos del usuario, sin contraseña.
 
-| Concepto | Cálculo |
-|----------|---------|
-| Subtotal | 3500 × 2 = **7000** |
-| IGV | 7000 × 0.18 = **1260** |
-| Total | 7000 + 1260 = **8260** |
+### 8B — Login
 
-### Listar (GET)
+- **POST** `http://127.0.0.1:5000/api/auth/login`
+- Body:
 
-- **GET** `http://127.0.0.1:5000/api/ventas` → las ventas con sus detalles anidados
+```json
+{
+    "email": "carlos@correo.com",
+    "password": "clave123"
+}
+```
 
-### Probar los errores
+Resultado: **200** con `access_token` y los datos del usuario. **Copiá el token.**
+
+### 8C — Roles SIN token (debe fallar)
+
+- **GET** `http://127.0.0.1:5000/api/roles`
+- Sin token → **401** `{"msg": "Token faltante o inválido"}`
+
+### 8D — Roles CON token (debe funcionar)
+
+- **GET** `http://127.0.0.1:5000/api/roles`
+- Pestaña **Authorization** → **Type: Bearer Token** → pegás el token
+- → **200** con la lista de roles
+
+### 8E — Probar los errores de JWT
 
 | Prueba | Resultado |
 |--------|-----------|
-| `producto_id: 999` | **404** "Producto no encontrado" |
-| `cantidad` mayor al stock | **400** "Stock insuficiente" |
-| Cliente sin `documento` | **400** con `errores` |
+| Token = `basura` | **401** "Token inválido o expirado" |
+| Sin header Authorization | **401** "Token faltante o inválido" |
+| POST/PUT/DELETE de roles sin token | **401** |
 
-### El momento "wow" en pgAdmin
+### 8F — Mirar la BD
 
 ```sql
--- La venta y sus totales
-SELECT id, correlativo, subtotal, igv, total, estado FROM ventas;
-
--- El detalle
-SELECT venta_id, producto_id, cantidad, precio_unitario, subtotal FROM venta_detalles;
-
--- El cliente
-SELECT documento, nombre, email, telefono FROM clientes;
-
--- El stock bajó
-SELECT id, nombre, stock FROM productos;
+SELECT id, nombre, email, password, rol_id FROM users;
 ```
 
-Mirá la tabla `clientes`: los datos del cliente están en texto plano, tal como los mandaste. El stock del producto bajó porque la venta lo descontó. Todo quedó registrado en la BD.
+`password` debe ser un hash de 60 caracteres (`$2b$...`). Si ves tu contraseña en claro, estás haciendo algo mal.
 
 ---
 
@@ -687,34 +557,12 @@ Mirá la tabla `clientes`: los datos del cliente están en texto plano, tal como
 
 | Tema | Conceptos clave |
 |------|-----------------|
-| Nubefact | Facturación electrónica, `requests.post` con `Bearer` token |
-| helpers | `NubefactHelper.emitir_factura` — los 3 helpers completos |
-| Modelos | `cascade="all, delete-orphan"`, `backref`, 3 tablas relacionadas |
-| Schemas anidados | `SaleCreate` = `cliente` + `detalles`, validación en cascada |
-| Get-or-create | `filter_by(...).first()` + `flush()` sin commit |
-| IGV | `subtotal * 0.18`, `round(x, 2)` |
-| Relación en acción | `venta.detalles = detalles` → un commit guarda todo |
-| Estado | `emitida` / `pendiente` según Nubefact |
-
----
-
-## El proyecto está COMPLETO 🎉
-
-En 4 sesiones construiste una API de e-commerce de verdad:
-
-```
-POST  /api/auth/register    Registrar usuario
-POST  /api/auth/login       Login (token JWT)
-GET   /api/roles            Listar roles (protegido)
-POST  /api/roles            Crear rol (protegido)
-GET   /api/categorias       Listar categorías
-POST  /api/categorias       Crear categoría
-GET   /api/productos        Listar productos activos
-POST  /api/productos        Crear producto (imagen en Cloudinary)
-PUT   /api/productos        Actualizar producto
-DELETE/api/productos        Desactivar producto
-GET   /api/ventas           Listar ventas
-POST  /api/ventas           Registrar venta (IGV + factura en Nubefact)
-```
-
-Con usuarios y contraseñas cifradas, tokens JWT, imágenes en la nube, descuento de stock y facturación electrónica. **Eso no lo hace cualquiera. Eso es un backend real.**
+| Claves secretas | `secrets.token_hex(32)`, `.env` protegido |
+| Helpers | `hash_password`, `verify_password` — código reutilizable |
+| Contraseñas | bcrypt con salt, jamás en claro, jamás en respuestas |
+| Modelo users | `ForeignKey` a roles, `relationship` + `backref`, email `unique` |
+| JWT | `create_access_token`, `identity`, 3 partes (header, payload, firma) |
+| Bug de Flask-RESTful | Convierte errores JWT en 500 → `EcommerceApi` lo re-lanza |
+| Callbacks | `unauthorized/invalid_token/expired_token_loader` → 401 limpios |
+| Proteger | `@jwt_required()` por método |
+| Decisión de diseño | Categorías públicas, Roles protegidos |
