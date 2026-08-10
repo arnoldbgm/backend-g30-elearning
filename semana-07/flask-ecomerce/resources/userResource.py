@@ -2,7 +2,7 @@ from flask_restful import Resource
 from flask import request
 from pydantic import ValidationError
 from db import db
-from models.user import UserModel
+from models.users_model import UserModel
 from schemas.user import UserCreate, UserResponse
 
 
