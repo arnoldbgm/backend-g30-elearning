@@ -3,7 +3,8 @@ from resources import (UserResource,
                        CategoryResource, 
                        OneCategoryResource,
                        RegisterResource,
-                       LoginResource)
+                       LoginResource,
+                       ProductResource)
 
 def register_routes(api: Api):
     api.add_resource(UserResource, "/api/users")
@@ -13,3 +14,5 @@ def register_routes(api: Api):
     # Usuarios
     api.add_resource(RegisterResource, "/api/v1/user/register")
     api.add_resource(LoginResource, "/api/v1/user/login")
+    # Productos
+    api.add_resource(ProductResource, "/api/v1/products")
