@@ -4,3 +4,4 @@ from .userResource import UserResource
 from .categories_resources import CategoryResource, OneCategoryResource
 from .users_resources import RegisterResource, LoginResource
 from .products_resources import ProductResource
+from .sales_resources import SaleResource
