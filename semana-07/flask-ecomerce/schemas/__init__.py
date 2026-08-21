@@ -4,3 +4,4 @@ from .user import UserCreate, UserResponse
 from .categories_schemas import CategorySchema
 from .users_schemas import RegisterSchema, LoginSchema
 from .product_schemas import ProductSchema
+from .sales_schemas import CustomerSchema, SaleDetailSchema, SaleSchema

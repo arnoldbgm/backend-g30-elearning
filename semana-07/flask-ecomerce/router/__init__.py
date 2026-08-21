@@ -4,7 +4,8 @@ from resources import (UserResource,
                        OneCategoryResource,
                        RegisterResource,
                        LoginResource,
-                       ProductResource)
+                       ProductResource,
+                       SaleResource)
 
 def register_routes(api: Api):
     api.add_resource(UserResource, "/api/users")
@@ -16,3 +17,5 @@ def register_routes(api: Api):
     api.add_resource(LoginResource, "/api/v1/user/login")
     # Productos
     api.add_resource(ProductResource, "/api/v1/products")
+    # Ventas
+    api.add_resource(SaleResource, "/api/v1/sales")
