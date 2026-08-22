@@ -11,3 +11,5 @@ class CategoriasModel(models.Model):
 
    class Meta:
       db_table = "categorias"
+
+   
