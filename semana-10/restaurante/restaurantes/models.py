@@ -13,6 +13,7 @@ class RestauranteModel(models.Model):
    # Esta es la forma en como nombramos una tabla
    class Meta:
       db_table = "restaurantes"
+      verbose_name = "Restaurante"
 
    # Como se va mostrar los datos en el Admin de Django
    # El metodo str, es un metodo magico dentro de python
@@ -38,6 +39,8 @@ class SucursalModel(models.Model):
       db_table = "sucursales"
       # unique_together => No puede existir dos veces la misma combinacion
       unique_together = [["restaurante", "nombre"]]
+      verbose_name = "Sucursal"
+      verbose_name_plural = "Sucursales"
 
    def __str__(self):
       # Maido - Arequipa
@@ -61,6 +64,8 @@ class MesaModel(models.Model):
       db_table = "mesas"
       # Dentro de una sucursal no se puedan repetir las mesas
       unique_together = [["sucursal", "numero"]]
+      verbose_name = "Mesa"
+      verbose_name_plural = "Mesas"
 
    def __str__(self):
       # Mesa 1 (Arequipa)

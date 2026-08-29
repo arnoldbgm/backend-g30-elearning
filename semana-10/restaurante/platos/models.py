@@ -12,6 +12,8 @@ class CategoriaModel(models.Model):
    class Meta:
       db_table = "categorias"
       unique_together = [["sucursal", "nombre"]]
+      # Configuracion amigable del nombre dentro del Admin
+      verbose_name = "Categoria"
 
    def __str__(self):
       return self.nombre
@@ -30,6 +32,7 @@ class PlatoModel(models.Model):
 
    class Meta:
       db_table = "platos"
+      verbose_name = "Plato"
 
    def __str__(self):
       # Lomo saltado - S/ 15.00
